@@ -1,4 +1,4 @@
-# nyc_piedtax
+# SimpleNYCPiedTax
 
 > ⚠️ **Unofficial. Use at your own risk. No warranties — the data may be wrong,
 > incomplete, or out of date.** Not affiliated with the City of New York or the
