@@ -7,11 +7,14 @@
 > **[DISCLAIMER.md](DISCLAIMER.md)** and [LICENSE](LICENSE) before relying on
 > anything here.
 
-NYC pied-à-terre tax — figuring out who'd owe it.
+A convenience index over NYC's public **supplemental market value roll**.
 
-Builds a searchable SQLite database from the NYC Department of Finance
-**supplemental tax rolls** (Tax Class 1 and Tax Class 2, tax year 2027), so you
-can look up property owners by name.
+The NYC Department of Finance publishes these tax rolls (Tax Class 1 and Tax
+Class 2, tax year 2027) as bulk CSVs. This tool just loads that already-public
+data into a local SQLite database so it's searchable by owner name instead of
+grepping a 36 MB file. It adds no new information and makes no judgment about any
+property or owner — in particular, **it cannot and does not identify who is
+subject to the non-primary-residence surcharge** (see below).
 
 ## What's here
 
@@ -43,8 +46,8 @@ commands above.
 ```bash
 python3 search.py tc2 "PEARL LLC"          # tokenized prefix match (default)
 python3 search.py tc1 "san yuen"           # matches "SO SAN YUEN, AS TRUSTEE"
-python3 search.py tc2 "trump" --limit 50
-python3 search.py tc2 "smith" --exact      # substring LIKE match instead
+python3 search.py tc2 "realty holdings" --limit 50
+python3 search.py tc2 "trust" --exact      # substring LIKE match instead
 python3 search.py tc2 "central park" --limit none | grep -i llc   # no cap, pipe to grep
 ```
 
@@ -65,12 +68,14 @@ $ python3 search.py tc2 "PEARL LLC" --limit 3
 87-89 PEARL LLC |  54 STONE STREET #2A          |  PARID 1000291303  |  FMV $1,741,153
 ```
 
-## Important: the roll is not a list of who owes
+## Important: the roll is not a list of who owes the surcharge
 
-The roll has ~960k rows, but only **~17,000 owners** are actually potentially
-subject to the surcharge — and they were notified privately by letter. Being in
-`tc1.db` / `tc2.db` means almost nothing, and you **cannot** reproduce the 17k
-list from this data. See **[docs/about-the-roll.md](docs/about-the-roll.md)** for
+The roll has ~960k rows — roughly every home and condo/co-op unit in the city —
+but only **~17,000 owners** are actually potentially subject to the surcharge,
+and they were notified privately by DOF letter. Being in `tc1.db` / `tc2.db`
+means almost nothing, and you **cannot** reproduce the ~17k list from this data.
+This tool does not attempt to. Don't use it to conclude — or imply — that anyone
+owes anything. See **[docs/about-the-roll.md](docs/about-the-roll.md)** for
 the full explanation (including the co-op rule that inflates the counts).
 
 ## Data source
