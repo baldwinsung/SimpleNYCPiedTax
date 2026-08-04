@@ -55,10 +55,22 @@ $ python3 search.py tc2 "PEARL LLC" --limit 3
 87-89 PEARL LLC |  54 STONE STREET #2A          |  PARID 1000291303  |  FMV $1,741,153
 ```
 
+## Important: the roll is not a list of who owes
+
+The roll has ~960k rows, but only **~17,000 owners** are actually potentially
+subject to the surcharge — and they were notified privately by letter. Being in
+`tc1.db` / `tc2.db` means almost nothing, and you **cannot** reproduce the 17k
+list from this data. See **[docs/about-the-roll.md](docs/about-the-roll.md)** for
+the full explanation (including the co-op rule that inflates the counts).
+
 ## Data source
 
 NYC Department of Finance, Supplemental Tax Rolls (TC1 / TC2), tax year 2027:
 `https://www.nyc.gov/assets/finance/downloads/tar/supplemental_roll_tc{1,2}_2027.zip`
+
+Published July 24, 2026. Context:
+[NYC DOF – Property Assessments](https://www.nyc.gov/site/finance/property/property-assessments.page)
+("Supplemental market value roll – July 2026").
 
 ---
 
