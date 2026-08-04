@@ -39,10 +39,20 @@ def main() -> None:
     ap = argparse.ArgumentParser(description="Search tax roll by owner name")
     ap.add_argument("db", help="tc1, tc2, or path to a .db file")
     ap.add_argument("name", help="owner name (or fragment) to search for")
-    ap.add_argument("--limit", type=int, default=25, help="max rows (default 25)")
+    ap.add_argument("--limit", default="25",
+                    help="max rows (default 25; 'none'/'all'/0 = no limit)")
     ap.add_argument("--exact", action="store_true",
                     help="substring LIKE match instead of FTS token/prefix match")
     args = ap.parse_args()
+
+    # -1 means "no limit" in SQLite; treat none/all/0 as unlimited
+    if str(args.limit).lower() in ("none", "all", "0"):
+        limit = -1
+    else:
+        try:
+            limit = int(args.limit)
+        except ValueError:
+            sys.exit(f"error: --limit must be an integer or none/all (got {args.limit!r})")
 
     con = sqlite3.connect(resolve_db(args.db))
     con.row_factory = sqlite3.Row
@@ -51,14 +61,14 @@ def main() -> None:
     if args.exact:
         rows = cur.execute(
             "SELECT * FROM properties WHERE OWNER LIKE ? ORDER BY OWNER LIMIT ?",
-            (f"%{args.name}%", args.limit),
+            (f"%{args.name}%", limit),
         ).fetchall()
     else:
         rows = cur.execute(
             "SELECT p.* FROM properties_fts f "
             "JOIN properties p ON p.rowid = f.rowid "
             "WHERE properties_fts MATCH ? ORDER BY p.OWNER LIMIT ?",
-            (fts_query(args.name), args.limit),
+            (fts_query(args.name), limit),
         ).fetchall()
 
     if not rows:

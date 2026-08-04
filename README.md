@@ -38,12 +38,15 @@ python3 search.py tc2 "PEARL LLC"          # tokenized prefix match (default)
 python3 search.py tc1 "san yuen"           # matches "SO SAN YUEN, AS TRUSTEE"
 python3 search.py tc2 "trump" --limit 50
 python3 search.py tc2 "smith" --exact      # substring LIKE match instead
+python3 search.py tc2 "central park" --limit none | grep -i llc   # no cap, pipe to grep
 ```
 
 - First argument is `tc1`, `tc2`, or a path to a `.db` file.
 - Default search uses the FTS5 index: each word is matched as a **prefix**,
   case-insensitive, all words required (AND). Order doesn't matter.
 - `--exact` switches to a plain `%LIKE%` substring match on the raw owner string.
+- `--limit none` (or `all` / `0`) removes the row cap — handy for piping the full
+  result set to `grep`, e.g. `... --limit none | grep -i fund`.
 - Output shows owner, address, PARID, and (for TC2) the fair market value.
 
 Example:
