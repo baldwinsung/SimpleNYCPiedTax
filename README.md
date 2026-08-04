@@ -1,5 +1,12 @@
 # nyc_piedtax
 
+> ⚠️ **Unofficial. Use at your own risk. No warranties — the data may be wrong,
+> incomplete, or out of date.** Not affiliated with the City of New York or the
+> NYC Department of Finance. Not legal, tax, or financial advice. **Being in this
+> data does NOT mean anyone owes the surcharge.** See
+> **[DISCLAIMER.md](DISCLAIMER.md)** and [LICENSE](LICENSE) before relying on
+> anything here.
+
 NYC pied-à-terre tax — figuring out who'd owe it.
 
 Builds a searchable SQLite database from the NYC Department of Finance
@@ -74,6 +81,12 @@ NYC Department of Finance, Supplemental Tax Rolls (TC1 / TC2), tax year 2027:
 Published July 24, 2026. Context:
 [NYC DOF – Property Assessments](https://www.nyc.gov/site/finance/property/property-assessments.page)
 ("Supplemental market value roll – July 2026").
+
+## License & disclaimer
+
+MIT licensed — see [LICENSE](LICENSE). The software is provided **"AS IS"**,
+without warranty of any kind, and the author is **not liable** for anything
+arising from its use. Read the full [DISCLAIMER.md](DISCLAIMER.md).
 
 ---
 
