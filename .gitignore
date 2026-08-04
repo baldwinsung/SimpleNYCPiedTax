@@ -3,3 +3,7 @@ __pycache__/
 .venv/
 venv/
 .DS_Store
+
+# Downloaded data + generated databases (regenerate with fetch.sh + build_db.py)
+data/
+*.db
