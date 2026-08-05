@@ -60,6 +60,29 @@ python3 search.py tc2 "central park" --limit none | grep -i llc   # no cap, pipe
   result set to `grep`, e.g. `... --limit none | grep -i fund`.
 - Output shows owner, address, PARID, and (for TC2) the fair market value.
 
+## Sorting
+
+```bash
+python3 search.py tc2 "llc" --sort fmv                      # priciest first
+python3 search.py tc2 -a "central park south" --sort fmv    # priciest on the block
+python3 search.py tc2 "smith" --sort address                # group by street
+python3 search.py tc2 "smith" --sort owner --reverse        # Z to A
+```
+
+- `--sort` takes `owner`, `address`, or `fmv`. The default is unchanged:
+  `address` for address-only searches, `owner` otherwise.
+- **`fmv` sorts highest-first**, since that's almost always the question being
+  asked; `-r` / `--reverse` flips any sort.
+- Sorting runs in SQL **before** `--limit`, so `--sort fmv --limit 25` is the 25
+  most valuable matches — not an alphabetical 25 reordered after the fact. This
+  is the part you can't get by piping to `sort`.
+- `--sort fmv` needs the `FMV` column, which only TC2 has; on `tc1` it exits
+  with an error rather than sorting silently wrong.
+
+Piping still works for anything else — the output is `|`-delimited, so
+`sort -t'|' -k1` sorts by owner (note `-t`, which BSD/macOS `sort` requires as a
+separate flag from the delimiter).
+
 Example:
 
 ```

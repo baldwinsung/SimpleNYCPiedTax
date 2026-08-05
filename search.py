@@ -15,6 +15,7 @@ Usage:
     python search.py tc2 --address "220 central park south"
     python search.py tc1 "smith" --address "e 7th st"    # both must match
     python search.py tc2.db "smith" --exact              # substring LIKE match
+    python search.py tc2 "llc" --sort fmv                # priciest matches first
 """
 import argparse
 import sqlite3
@@ -202,6 +203,35 @@ def format_row(row: sqlite3.Row, owners: OwnerLookup = None) -> str:
     return line
 
 
+ADDRESS_ORDER = "p.STREET_NAME, CAST(p.HOUSENUM_LO AS INTEGER), p.HOUSENUM_LO, p.APTNO"
+
+
+def order_by(con: sqlite3.Connection, args) -> str:
+    """ORDER BY clause for the requested --sort, or the default for this search.
+
+    Sorting happens in SQL, before LIMIT, so `--sort fmv --limit 25` is the 25
+    most valuable matches rather than an alphabetical 25 re-sorted afterwards.
+    """
+    choice = args.sort
+    if not choice:
+        # Address-only searches read best grouped by street; otherwise by owner
+        choice = "address" if (args.addr and not args.name) else "owner"
+
+    if choice == "fmv":
+        cols = {r[1] for r in con.execute("PRAGMA table_info(properties)")}
+        if "FMV" not in cols:
+            sys.exit("error: this roll has no FMV column (only TC2 records "
+                     "market values); use --sort owner or --sort address")
+        # FMV is TEXT, so compare numerically; highest first is the useful default
+        direction = "ASC" if args.reverse else "DESC"
+        return f"CAST(p.FMV AS INTEGER) {direction}, {ADDRESS_ORDER}"
+
+    order = ADDRESS_ORDER if choice == "address" else "p.OWNER"
+    if args.reverse:
+        return ", ".join(f"{c.strip()} DESC" for c in order.split(","))
+    return order
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(
         description="Search tax roll by owner name and/or address")
@@ -214,6 +244,11 @@ def main() -> None:
                     help="max rows (default 25; 'none'/'all'/0 = no limit)")
     ap.add_argument("--exact", action="store_true",
                     help="substring LIKE match instead of FTS token/prefix match")
+    ap.add_argument("--sort", choices=("owner", "address", "fmv"),
+                    help="sort order (default: address for address-only "
+                         "searches, owner otherwise; fmv sorts highest first)")
+    ap.add_argument("-r", "--reverse", action="store_true",
+                    help="reverse the sort order")
     args = ap.parse_args()
 
     if not args.name and not args.addr:
@@ -249,11 +284,7 @@ def main() -> None:
         where.append(sql)
         params += p
 
-    # Address-only searches read best grouped by street; otherwise by owner
-    if args.addr and not args.name:
-        order = "p.STREET_NAME, CAST(p.HOUSENUM_LO AS INTEGER), p.HOUSENUM_LO, p.APTNO"
-    else:
-        order = "p.OWNER"
+    order = order_by(con, args)
 
     rows = con.execute(
         f"SELECT p.* FROM properties p WHERE {' AND '.join(where)} "
