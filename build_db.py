@@ -2,7 +2,8 @@
 """Load a NYC supplemental tax roll CSV into a SQLite database.
 
 Each CSV becomes its own database with a `properties` table (one column per CSV
-field, all TEXT) plus an FTS5 index on OWNER for fast name search.
+field, all TEXT), an FTS5 index on OWNER for name search, and an FTS5 index of
+normalized address text for address search.
 
 Usage:
     python build_db.py data/tc1/supplemental_roll_TC1_2027.csv tc1.db
@@ -12,6 +13,8 @@ import csv
 import sqlite3
 import sys
 from pathlib import Path
+
+import address
 
 
 def build(csv_path: str, db_path: str) -> None:
@@ -61,9 +64,48 @@ def build(csv_path: str, db_path: str) -> None:
         "INSERT INTO properties_fts(rowid, owner) SELECT rowid, OWNER FROM properties"
     )
     cur.execute("CREATE INDEX idx_owner ON properties(OWNER)")
+
+    build_address_index(con, cols)
+
     con.commit()
     con.close()
     print(f"{csv_path.name}: {n:,} rows -> {db_path} ({len(cols)} cols)")
+
+
+def build_address_index(con: sqlite3.Connection, cols: list) -> None:
+    """FTS5 index of normalized address text, one row per property rowid.
+
+    Normalization happens in Python (see address.normalize), so this cannot be an
+    external-content table -- the indexed text does not appear verbatim in
+    `properties`.
+    """
+    addr_cols = [c for c in ("STREET_NAME", "APTNO", "CITYNAME", "ZIP_CODE")
+                 if c in cols]
+    if not addr_cols:
+        print("  (no address columns found; skipping address index)")
+        return
+
+    cur = con.cursor()
+    cur.execute("CREATE VIRTUAL TABLE address_fts USING fts5(address)")
+    quoted = ", ".join('"%s"' % c for c in addr_cols)
+    select = f"SELECT rowid, {quoted} FROM properties"
+
+    batch = []
+    for row in con.execute(select):
+        text = address.index_text(dict(zip(addr_cols, row[1:])))
+        batch.append((row[0], text))
+        if len(batch) >= 10000:
+            cur.executemany("INSERT INTO address_fts(rowid, address) VALUES (?, ?)", batch)
+            batch = []
+    if batch:
+        cur.executemany("INSERT INTO address_fts(rowid, address) VALUES (?, ?)", batch)
+
+    # House-number range filtering scans LO/HI; index the street for scoped queries
+    if "STREET_NAME" in cols:
+        cur.execute("CREATE INDEX idx_street ON properties(STREET_NAME)")
+    # Co-op unit rows have a blank OWNER; search.py resolves the name recorded
+    # against their tax lot, which is the same PARID as the building's row
+    cur.execute("CREATE INDEX idx_parid ON properties(PARID)")
 
 
 if __name__ == "__main__":

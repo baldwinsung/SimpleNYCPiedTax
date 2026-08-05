@@ -21,8 +21,9 @@ subject to the non-primary-residence surcharge** (see below).
 | File | Purpose |
 | --- | --- |
 | `fetch.sh` | Download + unzip the TC1 and TC2 roll CSVs from nyc.gov |
-| `build_db.py` | Load a roll CSV into its own SQLite DB (`tc1.db` / `tc2.db`) with an FTS5 name index |
-| `search.py` | Search a database by owner name |
+| `build_db.py` | Load a roll CSV into its own SQLite DB (`tc1.db` / `tc2.db`) with FTS5 name + address indexes |
+| `search.py` | Search a database by owner name and/or address |
+| `address.py` | Address normalization shared by the builder and the searcher |
 
 Two separate databases, one per roll — they have **different schemas**:
 
@@ -67,6 +68,87 @@ $ python3 search.py tc2 "PEARL LLC" --limit 3
 66 PEARL, LLC   |  1-5 COENTIES SLIP #RES       |  PARID 1000071002  |  FMV $9,372,000
 87-89 PEARL LLC |  54 STONE STREET #2A          |  PARID 1000291303  |  FMV $1,741,153
 ```
+
+## Searching by address
+
+```bash
+python3 search.py tc2 -a "220 central park south"      # whole building
+python3 search.py tc2 -a "220 central park south #57B" # one unit
+python3 search.py tc1 -a "e 7th st"                    # abbreviations expand
+python3 search.py tc1 -a "41-35C de reimer ave"        # Queens-style numbers
+python3 search.py tc2 "LLC" -a "central park south"    # name AND address
+```
+
+Query and index are normalized the same way, so you don't have to match the
+roll's spelling:
+
+- **Abbreviations expand** — `st`→`STREET`, `ave`→`AVENUE`, `blvd`→`BOULEVARD`,
+  `e`/`w`/`n`/`s`→`EAST`/`WEST`/`NORTH`/`SOUTH`, and so on.
+- **Ordinals are dropped** — `7th`→`7`. The roll contains *both*
+  `EAST 7 STREET` and `EAST 7TH STREET`; either spelling finds both.
+- **Punctuation and extra spaces don't matter** — `E. 7th St` works.
+- **House numbers match the recorded range.** Rows store a `HOUSENUM_LO`..`HI`
+  span, so `3 coenties slip` finds the row filed as `1-5 COENTIES SLIP`, and
+  `22 downing st` finds `22-24 DOWNING STREET`.
+- **Apartments must be marked** with `#57B`, `APT 57B`, or `UNIT 57B`. An
+  unmarked trailing number is read as part of the street name — otherwise
+  `e 7th st` would also match `789 EAST 160 STREET #7`.
+- Numeric tokens match whole words (so `east 7 street` doesn't drag in
+  `EAST 70`–`EAST 79 STREET`); word tokens still match as prefixes.
+- For TC2, city and ZIP are searchable too: `-a "coenties slip 10004"`.
+- `--exact` here means a plain substring match against the raw
+  `HOUSENUM_LO STREET_NAME APTNO` text, with no normalization at all.
+
+Databases built before address search still work — `search.py` falls back to
+normalizing on the fly and warns you. Rebuilding with `build_db.py` takes a few
+seconds and makes address queries ~10x faster.
+
+## Co-op units have no owner name
+
+If you find a unit by address but no name comes back, it is almost certainly a
+co-op. **Every one of the 36,677 co-op unit rows in `tc2.db` has an empty
+`OWNER` field** — 100%, by design, not a data gap:
+
+| Row type in `tc2.db` | Rows | Blank owner |
+| --- | ---: | ---: |
+| Co-op **unit** rows | 36,677 | **36,677 (100%)** |
+| Co-op **building** rows | 7,374 | 0 |
+| Condo rows | 230,921 | 10 (~0%) |
+| TC1 (houses) | 684,619 | 25 (~0%) |
+
+The PARID (a boro-block-lot parcel ID) shows exactly why. A **condo** files each
+unit as its own tax lot, so every unit has its own PARID, its own deed, and its
+own owner name. A **co-op** is a single tax lot for the entire building — every
+unit shares one PARID — and a shareholder holds stock plus a proprietary lease
+rather than a deed, so there is no unit-level owner for DOF to record:
+
+```
+CONDO — 220 Central Park South     CO-OP — 5 Tudor City Place
+  #18A  PARID 1010301001  lot 1001   #0A01  PARID 1013330023  lot 23   (no owner)
+  #18B  PARID 1010301002  lot 1002   #0A02  PARID 1013330023  lot 23   (no owner)
+  #18C  PARID 1010301003  lot 1003   #0A03  PARID 1013330023  lot 23   (no owner)
+```
+
+So the PARID is the *reason* there is no name, not a way around it — looking a
+co-op unit up by PARID returns the building's corporation, which is the only
+owner the lot has. `search.py` does that lookup and labels the unit rather than
+printing a blank:
+
+```
+$ python3 search.py tc2 -a "5 tudor city place" --limit 3
+WINDSOR OWNERS CORP CO TUDOR REALTYSVCS  CORP  |  1-19 TUDOR CITY PLACE  |  PARID 1013330023  |  FMV $104,539,000
+[CO-OP UNIT — no individual owner; building: WINDSOR OWNERS CORP …]  |  5 TUDOR CITY PLACE #0A01  |  PARID 1013330023  |  FMV $186,276
+[CO-OP UNIT — no individual owner; building: WINDSOR OWNERS CORP …]  |  5 TUDOR CITY PLACE #0A02  |  PARID 1013330023  |  FMV $119,908
+```
+
+Condos are individually deeded and *do* carry real owner names. **A co-op
+resident's name is not in this dataset in any form** — no search can surface it.
+Rows blank for other reasons show `[no owner listed]`.
+
+The lookup keys on PARID, not `COOP_NUM`. `COOP_NUM` identifies the co-op
+*corporation*, which can span several parcels — 429 and 431 WEST BROADWAY share
+`COOP_NUM 100320` under two spellings of one corp — so it is ambiguous for 717
+unit rows. PARID is the parcel and reaches exactly one name for all 36,677.
 
 ## Important: the roll is not a list of who owes the surcharge
 

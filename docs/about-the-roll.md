@@ -51,6 +51,21 @@ lists **all 300 units** — it can't publish the one without publishing the whol
 building's allocation. One potentially-subject penthouse drags 299 unaffected
 neighbors onto the list. That's why TC2 is padded with co-op units.
 
+The same rule, seen from the other side: those unit rows are **anonymous**. All
+36,677 co-op unit rows in TC2 have an empty `OWNER` field — 100% of them.
+
+The parcel IDs show why. A condo files each unit as its own tax lot, so every
+unit has a distinct `PARID` and a deeded owner. A co-op is **one tax lot for the
+whole building** — all its units share the building's `PARID` — and a
+shareholder holds stock plus a proprietary lease, not a deed. There is simply no
+unit-level owner to record; the only name on the lot is the co-op corporation
+(`WINDSOR OWNERS CORP`, etc.).
+
+So the co-op rule inflates the row count *without* naming anybody. Condos, which
+are individually deeded, do carry real owner names. If you look up a co-op unit
+and find no name, that is the data working as designed — the resident's name is
+not in this dataset in any form.
+
 ### 3. The ~17,000 who actually owe were notified privately, by letter.
 
 The targeting logic — who's a non-primary resident, whose mailing address is out
