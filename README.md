@@ -192,6 +192,10 @@ Published July 24, 2026. Context:
 [NYC DOF – Property Assessments](https://www.nyc.gov/site/finance/property/property-assessments.page)
 ("Supplemental market value roll – July 2026").
 
+For the broader legislative/rollout timeline and a check on whether DOF
+publishes exemption-filing data anywhere (it doesn't), see
+[docs/status-2026-08.md](docs/status-2026-08.md).
+
 ## License & disclaimer
 
 MIT licensed — see [LICENSE](LICENSE). The software is provided **"AS IS"**,

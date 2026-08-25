@@ -24,6 +24,23 @@ by DOF letter — information that is **not** contained in this data and **canno
 be derived from it. See [docs/about-the-roll.md](docs/about-the-roll.md). Do not
 use this tool to conclude that anyone does or does not owe any tax.
 
+## Informational content only
+
+Files under `docs/` (e.g. [docs/status-2026-08.md](docs/status-2026-08.md),
+[docs/about-the-roll.md](docs/about-the-roll.md)) that summarize the law,
+timeline, rates, exemption process, litigation, or news coverage are provided
+**for informational purposes only**. They are the author's summary of
+third-party news, law-firm client alerts, and government press releases as of
+the date noted in each file, may contain errors, and may be **out of date by
+the time you read them** — this tax's rules, deadlines, and legal status have
+already changed multiple times since enactment and may change again. These
+summaries are **not** a substitute for the official DOF guidance or legal
+counsel, and are **not** legal, tax, or financial advice (see "Not advice"
+below). Always verify current status against the primary sources linked in
+each doc's "Sources" section and against
+[NYC DOF's official pages](https://www.nyc.gov/site/finance/property/property-assessments.page)
+before relying on anything.
+
 ## Not advice
 
 Nothing here is legal, tax, financial, or professional advice. For any decision
