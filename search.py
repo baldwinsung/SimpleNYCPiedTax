@@ -220,8 +220,9 @@ def order_by(con: sqlite3.Connection, args) -> str:
     if choice == "fmv":
         cols = {r[1] for r in con.execute("PRAGMA table_info(properties)")}
         if "FMV" not in cols:
-            sys.exit("error: this roll has no FMV column (only TC2 records "
-                     "market values); use --sort owner or --sort address")
+            sys.exit("error: this database has no FMV column; rebuild it with "
+                      "build_db.py (tc1 needs the property-master join argument "
+                      "-- see README) or use --sort owner / --sort address")
         # FMV is TEXT, so compare numerically; highest first is the useful default
         direction = "ASC" if args.reverse else "DESC"
         return f"CAST(p.FMV AS INTEGER) {direction}, {ADDRESS_ORDER}"

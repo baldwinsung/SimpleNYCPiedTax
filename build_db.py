@@ -8,6 +8,12 @@ normalized address text for address search.
 Usage:
     python build_db.py data/tc1/supplemental_roll_TC1_2027.csv tc1.db
     python build_db.py data/tc2/supplemental_roll_TC2_2027.csv tc2.db
+
+    # TC1's supplemental roll has no market-value column. Pass the FY2027
+    # final assessment "property master" file (fetch.sh downloads it to
+    # data/tc1_master/) as a third argument to join one in as FMV:
+    python build_db.py data/tc1/supplemental_roll_TC1_2027.csv tc1.db \\
+        data/tc1_master/PROPMAST_TC1_2027_FIN.txt
 """
 import csv
 import sqlite3
@@ -17,7 +23,7 @@ from pathlib import Path
 import address
 
 
-def build(csv_path: str, db_path: str) -> None:
+def build(csv_path: str, db_path: str, master_path: str = None) -> None:
     csv_path = Path(csv_path)
     db_path = Path(db_path)
     if db_path.exists():
@@ -55,6 +61,9 @@ def build(csv_path: str, db_path: str) -> None:
             cur.executemany(insert, batch)
             n += len(batch)
 
+    if master_path:
+        add_fmv_column(con, master_path, cols)
+
     # FTS5 index over OWNER (tokenized name search) + plain index for exact lookups
     cur.execute(
         "CREATE VIRTUAL TABLE properties_fts USING fts5("
@@ -70,6 +79,71 @@ def build(csv_path: str, db_path: str) -> None:
     con.commit()
     con.close()
     print(f"{csv_path.name}: {n:,} rows -> {db_path} ({len(cols)} cols)")
+
+
+def load_market_values(master_path: Path) -> dict:
+    """PARID -> market value (plain digit string) from a PTS property-master file.
+
+    The property master is tab-delimited, one row per parcel, with no PARID
+    column of its own to key on reliably (its PARID field is fixed-width and
+    space-padded) -- BORO/BLOCK/LOT concatenate into the same PARID format the
+    supplemental rolls use, so rebuild it from those instead. FINMKTTOT ("Final
+    Market Assessed Total Value") is the DOF market value figure -- the same
+    concept as the supplemental roll's own FMV column, just from a different
+    file, since TC1's supplemental roll doesn't carry one.
+    """
+    values = {}
+    with master_path.open(encoding="utf-8", errors="replace") as fh:
+        header = fh.readline().rstrip("\n").split("\t")
+        idx = {c: i for i, c in enumerate(header)}
+        required = ("BORO", "BLOCK", "LOT", "FINMKTTOT")
+        missing = [c for c in required if c not in idx]
+        if missing:
+            sys.exit(f"error: {master_path} is missing columns {missing}")
+
+        for line in fh:
+            parts = line.rstrip("\n").split("\t")
+            parid = (
+                parts[idx["BORO"]].strip()
+                + parts[idx["BLOCK"]].strip().zfill(5)
+                + parts[idx["LOT"]].strip().zfill(4)
+            )
+            try:
+                values[parid] = str(int(parts[idx["FINMKTTOT"]]))
+            except ValueError:
+                pass
+    return values
+
+
+def add_fmv_column(con: sqlite3.Connection, master_path: str, cols: list) -> None:
+    """Join market values from a property-master file onto `properties` as FMV."""
+    if "FMV" in cols:
+        print("  (properties already has FMV; skipping market-value join)")
+        return
+    if "PARID" not in cols:
+        sys.exit("error: --master join needs a PARID column to key on")
+
+    values = load_market_values(Path(master_path))
+
+    cur = con.cursor()
+    cur.execute("CREATE TEMP TABLE market_values (parid TEXT PRIMARY KEY, fmv TEXT)")
+    cur.executemany(
+        "INSERT INTO market_values VALUES (?, ?)", values.items()
+    )
+    cur.execute('ALTER TABLE properties ADD COLUMN "FMV" TEXT')
+    cur.execute(
+        "UPDATE properties SET FMV = ("
+        "  SELECT fmv FROM market_values WHERE market_values.parid = properties.PARID"
+        ")"
+    )
+    cur.execute("DROP TABLE market_values")
+
+    matched = cur.execute(
+        "SELECT COUNT(*) FROM properties WHERE FMV IS NOT NULL"
+    ).fetchone()[0]
+    total = cur.execute("SELECT COUNT(*) FROM properties").fetchone()[0]
+    print(f"  joined FMV from {Path(master_path).name}: "
+          f"{matched:,}/{total:,} rows matched")
 
 
 def build_address_index(con: sqlite3.Connection, cols: list) -> None:
@@ -109,6 +183,6 @@ def build_address_index(con: sqlite3.Connection, cols: list) -> None:
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 3:
+    if len(sys.argv) not in (3, 4):
         sys.exit(__doc__)
-    build(sys.argv[1], sys.argv[2])
+    build(sys.argv[1], sys.argv[2], sys.argv[3] if len(sys.argv) == 4 else None)

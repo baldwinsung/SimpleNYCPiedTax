@@ -17,4 +17,13 @@ for tc in tc1 tc2; do
   unzip -o "data/${tc}.zip" -d "data/${tc}" >/dev/null
 done
 
-echo "Done. CSVs are under data/tc1/ and data/tc2/."
+# TC1's supplemental roll has no market-value column (DOF just omits it there).
+# The FY2027 final assessment "property master" file has one (FINMKTTOT), and
+# every TC1 PARID is present in it, so build_db.py can join it in as FMV.
+echo "Downloading tc1 property master (for market values)..."
+curl -fsSL -A "$UA" -H "Referer: $REFERER" \
+  -o "data/tc1_master.zip" "${BASE}/fy27_tc1.zip"
+unzip -o "data/tc1_master.zip" -d "data/tc1_master" >/dev/null
+
+echo "Done. CSVs are under data/tc1/ and data/tc2/; the TC1 property master is"
+echo "under data/tc1_master/."

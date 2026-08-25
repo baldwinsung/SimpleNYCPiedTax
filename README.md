@@ -20,27 +20,47 @@ subject to the non-primary-residence surcharge** (see below).
 
 | File | Purpose |
 | --- | --- |
-| `fetch.sh` | Download + unzip the TC1 and TC2 roll CSVs from nyc.gov |
+| `fetch.sh` | Download + unzip the TC1 and TC2 roll CSVs, plus the TC1 property-master file, from nyc.gov |
 | `build_db.py` | Load a roll CSV into its own SQLite DB (`tc1.db` / `tc2.db`) with FTS5 name + address indexes |
 | `search.py` | Search a database by owner name and/or address |
 | `address.py` | Address normalization shared by the builder and the searcher |
 
 Two separate databases, one per roll — they have **different schemas**:
 
-- **`tc1.db`** — Tax Class 1 (~685k rows): `PARID, OWNER, HOUSENUM_LO, HOUSENUM_HI, STREET_NAME, APTNO`
+- **`tc1.db`** — Tax Class 1 (~685k rows): `PARID, OWNER, HOUSENUM_LO, HOUSENUM_HI, STREET_NAME, APTNO`, plus `FMV` if built with the property-master join (see below)
 - **`tc2.db`** — Tax Class 2 (~275k rows): the above plus `BORO, BLOCK, LOT, TAXYR, RECTYPE, TAX_CLASS, BLDG_CLASS, ZIP_CODE, CITYNAME, COOP_*, CONDO_NUMBER, FMV`
 
 ## Setup
 
 ```bash
 ./fetch.sh                                             # download + unzip CSVs into data/
-python3 build_db.py data/tc1/supplemental_roll_TC1_2027.csv tc1.db
+python3 build_db.py data/tc1/supplemental_roll_TC1_2027.csv tc1.db \
+    data/tc1_master/PROPMAST_TC1_2027_FIN.txt          # 3rd arg joins in FMV (see below)
 python3 build_db.py data/tc2/supplemental_roll_TC2_2027.csv tc2.db
 ```
 
 Only the Python standard library is required (`sqlite3`, built with FTS5).
 The `data/` downloads and `*.db` files are gitignored — regenerate them with the
 commands above.
+
+### Why TC1 needs a join for FMV
+
+TC2's supplemental roll carries its own `FMV` column. TC1's supplemental roll
+doesn't — DOF's file for TC1 is just `PARID, OWNER, HOUSENUM_LO, HOUSENUM_HI,
+STREET_NAME, APTNO`, with no value field at all (confirmed against the raw
+CSV header, not an omission on this tool's part). `fetch.sh` also downloads
+DOF's FY2027 final assessment **property master** file for TC1
+(`fy27_tc1.zip`, ~75MB, under `data/tc1_master/`), which does carry a market
+value per parcel (`FINMKTTOT`, "Final Market Assessed Total Value" — the same
+concept as TC2's `FMV`, just a different DOF file). Passing that file as
+`build_db.py`'s third argument joins it onto `tc1.db` by parcel (`PARID`,
+rebuilt from `BORO`+`BLOCK`+`LOT` since the master file's own `PARID` field
+is fixed-width and unreliable to match on directly). Every one of the 684,619
+TC1 supplemental-roll parcels has a match in the property master, so the join
+is 100% coverage, not a partial fill. See
+[docs/status-2026-08.md](docs/status-2026-08.md#market-value-vs-assessed-value)
+for why this is *market* value, not assessed value, and why that distinction
+is what the surcharge threshold actually uses.
 
 ## Searching by name
 
@@ -58,7 +78,9 @@ python3 search.py tc2 "central park" --limit none | grep -i llc   # no cap, pipe
 - `--exact` switches to a plain `%LIKE%` substring match on the raw owner string.
 - `--limit none` (or `all` / `0`) removes the row cap — handy for piping the full
   result set to `grep`, e.g. `... --limit none | grep -i fund`.
-- Output shows owner, address, PARID, and (for TC2) the fair market value.
+- Output shows owner, address, PARID, and the fair market value if the
+  database has an `FMV` column (always true for `tc2.db`; true for `tc1.db`
+  only if it was built with the property-master join — see Setup).
 
 ## Sorting
 
@@ -76,8 +98,9 @@ python3 search.py tc2 "smith" --sort owner --reverse        # Z to A
 - Sorting runs in SQL **before** `--limit`, so `--sort fmv --limit 25` is the 25
   most valuable matches — not an alphabetical 25 reordered after the fact. This
   is the part you can't get by piping to `sort`.
-- `--sort fmv` needs the `FMV` column, which only TC2 has; on `tc1` it exits
-  with an error rather than sorting silently wrong.
+- `--sort fmv` needs an `FMV` column; on a `tc1.db` built without the
+  property-master join (see Setup) it exits with an error rather than sorting
+  silently wrong.
 
 Piping still works for anything else — the output is `|`-delimited, so
 `sort -t'|' -k1` sorts by owner (note `-t`, which BSD/macOS `sort` requires as a
@@ -191,6 +214,13 @@ NYC Department of Finance, Supplemental Tax Rolls (TC1 / TC2), tax year 2027:
 Published July 24, 2026. Context:
 [NYC DOF – Property Assessments](https://www.nyc.gov/site/finance/property/property-assessments.page)
 ("Supplemental market value roll – July 2026").
+
+TC1 market values come from a second file, DOF's FY2027 final assessment
+**property master**:
+`https://www.nyc.gov/assets/finance/downloads/tar/fy27_tc1.zip`
+(`PROPMAST_TC1_2027_FIN.txt`, field `FINMKTTOT`) — same page, "Tax Class 1
+Data" under the property-assessment-roll download section, record layout
+linked there as `layout-pts-property-master.xlsx`.
 
 For the broader legislative/rollout timeline and a check on whether DOF
 publishes exemption-filing data anywhere (it doesn't), see
